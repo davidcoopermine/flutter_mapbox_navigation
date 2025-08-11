@@ -63,7 +63,7 @@ class FlutterMapboxNavigationPlugin : FlutterPlugin, MethodCallHandler,
         var enableFreeDriveMode = false
         var mapStyleUrlDay: String? = null
         var mapStyleUrlNight: String? = null
-        var navigationLanguage = "en"
+        var navigationLanguage = "pt-BR"
         var navigationVoiceUnits = DirectionsCriteria.IMPERIAL
         var voiceInstructionsEnabled = true
         var bannerInstructionsEnabled = true

@@ -28,7 +28,7 @@ class MapBoxNavigation {
     simulateRoute: false,
     animateBuildRoute: true,
     longPressDestinationEnabled: true,
-    language: 'en',
+    language: 'pt-BR',
   );
 
   /// setter to set default options

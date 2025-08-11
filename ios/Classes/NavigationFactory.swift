@@ -26,7 +26,7 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     var _simulateRoute = false
     var _allowsUTurnAtWayPoints: Bool?
     var _isOptimized = false
-    var _language = "en"
+    var _language = "pt-BR"
     var _voiceUnits = "imperial"
     var _mapStyleUrlDay: String?
     var _mapStyleUrlNight: String?

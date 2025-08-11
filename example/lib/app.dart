@@ -81,7 +81,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
 
     _navigationOption = MapBoxNavigation.instance.getDefaultOptions();
     _navigationOption.simulateRoute = true;
-    _navigationOption.language = "en";
+    _navigationOption.language = "pt-BR";
     //_navigationOption.initialLatitude = 36.1175275;
     //_navigationOption.initialLongitude = -115.1839524;
     MapBoxNavigation.instance.registerRouteEventListener(_onEmbeddedRouteEvent);
@@ -142,7 +142,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             opt.voiceInstructionsEnabled = true;
                             opt.bannerInstructionsEnabled = true;
                             opt.units = VoiceUnits.metric;
-                            opt.language = "de-DE";
+                            opt.language = "pt-BR";
                             await MapBoxNavigation.instance
                                 .startNavigation(wayPoints: wayPoints, options: opt);
                           },
@@ -166,7 +166,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                                 options: MapBoxOptions(
                                     mode: MapBoxNavigationMode.driving,
                                     simulateRoute: true,
-                                    language: "en",
+                                    language: "pt-BR",
                                     allowsUTurnAtWayPoints: true,
                                     units: VoiceUnits.metric));
                             //after 10 seconds add a new stop
