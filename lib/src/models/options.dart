@@ -73,7 +73,7 @@ class MapBoxOptions {
   /// This property affects the sentence
   /// contained within the RouteStep.instructions property, but it does not
   /// affect any road names contained in that property or other properties
-  /// such as RouteStep.name. Defaults to 'en' if an unsupported language
+  /// such as RouteStep.name. Defaults to 'pt-BR' if an unsupported language
   /// is specified. The languages in this link are supported:
   ///  https://docs.mapbox.com/android/navigation/overview/localization/ or
   /// https://docs.mapbox.com/ios/api/navigation/0.14.1/localization-and-internationalization.html
