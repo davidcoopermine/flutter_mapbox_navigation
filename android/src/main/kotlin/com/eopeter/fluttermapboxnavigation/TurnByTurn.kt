@@ -372,7 +372,7 @@ open class TurnByTurn(
     private var mapStyleUrlDay: String? = null
     private var mapStyleUrlNight: String? = null
     private var navigationLanguage = "pt-BR"
-    private var navigationVoiceUnits = DirectionsCriteria.IMPERIAL
+    private var navigationVoiceUnits = DirectionsCriteria.METRIC
     private var zoom = 15.0
     private var bearing = 0.0
     private var tilt = 0.0

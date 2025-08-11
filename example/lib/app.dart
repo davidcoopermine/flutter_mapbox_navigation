@@ -300,7 +300,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             children: <Widget>[
                               const Text("Distance Remaining: "),
                               Text(_distanceRemaining != null
-                                  ? "${(_distanceRemaining! * 0.000621371).toStringAsFixed(1)} miles"
+                                  ? "${(_distanceRemaining! / 1000).toStringAsFixed(1)} km"
                                   : "---")
                             ],
                           ),
