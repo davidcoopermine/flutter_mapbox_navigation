@@ -236,17 +236,6 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                                 }
                               : null,
                           child: const Text('Start '),
-                        ),
-                        const SizedBox(
-                          width: 10,
-                        ),
-                        ElevatedButton(
-                          onPressed: _isNavigating
-                              ? () {
-                                  _controller?.finishNavigation();
-                                }
-                              : null,
-                          child: const Text('Cancel '),
                         )
                       ],
                     ),
