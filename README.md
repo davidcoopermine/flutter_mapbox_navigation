@@ -94,7 +94,7 @@ class MainActivity: FlutterFragmentActivity() {
                      mode: MapBoxNavigationMode.drivingWithTraffic,
                      mapStyleUrlDay: "https://url_to_day_style",
                      mapStyleUrlNight: "https://url_to_night_style",
-                     units: VoiceUnits.imperial,
+                     units: VoiceUnits.metric,
                      simulateRoute: true,
                      language: "en"))
 ```
