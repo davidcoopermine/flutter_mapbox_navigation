@@ -63,7 +63,7 @@ Após adicionar o acima, seu arquivo gradle.properties pode ficar assim:
 org.gradle.jvmargs=-Xmx1536M
 android.useAndroidX=true
 android.enableJetifier=true
-MAPBOX_DOWNLOADS_TOKEN=sk.epe9nE9peAcmwNzKVNqSbFfp2794YtnNepe9nE9peAcmwNzKVNqSbFfp2794YtnN.-HrbMMQmLdHwYb8r
+MAPBOX_DOWNLOADS_TOKEN=seutokenDeDownload
 ```
 
 4. Atualize `MainActivity.kt` para estender `FlutterFragmentActivity` em vez de `FlutterActivity`. Caso contrário você receberá `Caused by: java.lang.IllegalStateException: Please ensure that the hosting Context is a valid ViewModelStoreOwner`.
