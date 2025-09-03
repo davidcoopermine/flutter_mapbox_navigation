@@ -31,7 +31,7 @@ class MapBoxNavigation {
     language: 'pt-BR',
     showPlannedRoute: true,
     plannedRouteColor: '#FFFF00',
-    offRouteWarningEnabled: true,
+    autoRecalculateOnDeviation: true,
   );
 
   List<WayPoint>? _plannedRoute;
@@ -95,8 +95,8 @@ class MapBoxNavigation {
   }) async {
     options ??= _defaultOptions;
     
-    // Store the first route as the planned route
-    if (_plannedRoute == null && (options.showPlannedRoute ?? false)) {
+    // Always store the route as the planned guide route when enabled
+    if (options.showPlannedRoute ?? true) {
       _plannedRoute = List<WayPoint>.from(wayPoints);
     }
     

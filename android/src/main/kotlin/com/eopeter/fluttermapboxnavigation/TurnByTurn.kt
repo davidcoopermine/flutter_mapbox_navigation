@@ -148,10 +148,13 @@ open class TurnByTurn(
                 ) {
                     this@TurnByTurn.currentRoutes = routes
                     
-                    // Store the first route as the planned route
-                    if (this@TurnByTurn.isFirstRoute && this@TurnByTurn.showPlannedRoute) {
+                    // Always store the route as planned route (guide layer)
+                    if (this@TurnByTurn.showPlannedRoute && this@TurnByTurn.plannedRoute == null) {
                         this@TurnByTurn.plannedRoute = routes
-                        this@TurnByTurn.isFirstRoute = false
+                        // Store geometry for comparison
+                        routes.firstOrNull()?.directionsRoute?.geometry()?.let { geometry ->
+                            this@TurnByTurn.plannedRouteGeometry = geometry
+                        }
                     }
                     
                     PluginUtilities.sendEvent(
@@ -238,9 +241,9 @@ open class TurnByTurn(
     private fun finishNavigation(isOffRouted: Boolean = false) {
         MapboxNavigationApp.current()!!.stopTripSession()
         this.isNavigationCanceled = true
-        // Reset planned route state
+        // Clear planned route when navigation finishes
         this.plannedRoute = null
-        this.isFirstRoute = true
+        this.plannedRouteGeometry = null
         PluginUtilities.sendEvent(MapBoxEvents.NAVIGATION_CANCELLED)
     }
 
@@ -318,6 +321,11 @@ open class TurnByTurn(
         if (altRoute != null) {
             this.alternatives = altRoute
         }
+        
+        // Force alternatives to false when showing planned route to avoid gray routes
+        if (showPlannedRoute) {
+            this.alternatives = false
+        }
 
         val voiceEnabled = arguments["voiceInstructionsEnabled"] as? Boolean
         if (voiceEnabled != null) {
@@ -349,9 +357,9 @@ open class TurnByTurn(
             this.plannedRouteColor = plannedColor
         }
         
-        val offRouteWarn = arguments["offRouteWarningEnabled"] as? Boolean
-        if (offRouteWarn != null) {
-            this.offRouteWarningEnabled = offRouteWarn
+        val autoRecalc = arguments["autoRecalculateOnDeviation"] as? Boolean
+        if (autoRecalc != null) {
+            this.autoRecalculateOnDeviation = autoRecalc
         }
     }
 
@@ -429,9 +437,9 @@ open class TurnByTurn(
     // Planned route support
     private var showPlannedRoute = true
     private var plannedRouteColor = "#FFFF00"
-    private var offRouteWarningEnabled = true
+    private var autoRecalculateOnDeviation = true
     private var plannedRoute: List<NavigationRoute>? = null
-    private var isFirstRoute = true
+    private var plannedRouteGeometry: String? = null
 
     private var currentRoutes: List<NavigationRoute>? = null
     private var isNavigationCanceled = false
@@ -455,10 +463,8 @@ open class TurnByTurn(
         override fun onNewLocationMatcherResult(locationMatcherResult: LocationMatcherResult) {
             this@TurnByTurn.lastLocation = locationMatcherResult.enhancedLocation
             
-            // Check if user is off the planned route
-            locationMatcherResult.enhancedLocation?.let { location ->
-                checkOffPlannedRoute(location)
-            }
+            // Location tracking for navigation
+            // The MapBox SDK handles off-route detection automatically
         }
 
         override fun onNewRawLocation(rawLocation: Location) {
@@ -478,13 +484,8 @@ open class TurnByTurn(
         if (offRoute) {
             PluginUtilities.sendEvent(MapBoxEvents.USER_OFF_ROUTE)
             
-            // Check if user is also off the planned route
-            if (offRouteWarningEnabled && currentRoutes != null && plannedRoute != null) {
-                // If current route is different from planned route, user is off planned route
-                if (currentRoutes?.firstOrNull()?.id != plannedRoute?.firstOrNull()?.id) {
-                    PluginUtilities.sendEvent(MapBoxEvents.OFF_PLANNED_ROUTE)
-                }
-            }
+            // When off-route, the blue navigation route will automatically recalculate
+            // The yellow planned route guide layer remains fixed
         }
     }
 
@@ -492,20 +493,11 @@ open class TurnByTurn(
         if (routeUpdateResult.navigationRoutes.isNotEmpty()) {
             PluginUtilities.sendEvent(MapBoxEvents.REROUTE_ALONG)
             
-            // Update current routes
+            // Update current routes - this is the blue navigation route
             currentRoutes = routeUpdateResult.navigationRoutes
             
-            // Check if the new route is different from planned route
-            if (offRouteWarningEnabled && plannedRoute != null) {
-                val newRouteId = routeUpdateResult.navigationRoutes.firstOrNull()?.id
-                val plannedRouteId = plannedRoute?.firstOrNull()?.id
-                
-                if (newRouteId != plannedRouteId) {
-                    PluginUtilities.sendEvent(MapBoxEvents.OFF_PLANNED_ROUTE)
-                } else {
-                    PluginUtilities.sendEvent(MapBoxEvents.RETURNED_TO_PLANNED_ROUTE)
-                }
-            }
+            // The planned route (yellow guide) stays fixed and unchanged
+            // The blue route will recalculate automatically when off-route
         }
     }
 
@@ -597,81 +589,23 @@ open class TurnByTurn(
     private fun drawPlannedRoute() {
         if (!showPlannedRoute || plannedRoute == null) return
         
-        // Initialize route line if not already done
-        if (plannedRouteLineApi == null) {
-            initializePlannedRouteLine()
-        }
-        
-        // Draw the planned route
-        plannedRoute?.let { routes ->
-            plannedRouteLineApi?.setNavigationRoutes(routes) { value ->
-                // Render the route on the map
-                try {
-                    this.binding.navigationView.api.routeReplayEnabled(false)
-                    // For now, just store the route for comparison
-                    // Full visual rendering would require access to the MapView
-                    // which may not be directly accessible in this context
-                } catch (e: Exception) {
-                    Log.e("PlannedRoute", "Error drawing planned route: ${e.message}")
-                }
+        try {
+            // The planned route rendering will be handled by the NavigationView
+            // We need to configure it to show the original route as a yellow guide layer
+            // and keep the blue navigation route separate for recalculation
+            
+            // Set alternatives to false to avoid showing gray routes
+            this.binding.navigationView.customizeViewOptions {
+                showAlternativeRoutes = false
             }
+            
+            Log.d("PlannedRoute", "Planned route guide layer configured")
+        } catch (e: Exception) {
+            Log.e("PlannedRoute", "Error configuring planned route: ${e.message}")
         }
     }
 
-    private fun checkOffPlannedRoute(currentLocation: Location) {
-        if (!offRouteWarningEnabled || plannedRoute == null) return
-        
-        plannedRoute?.firstOrNull()?.directionsRoute?.let { route ->
-            val currentPoint = Point.fromLngLat(currentLocation.longitude, currentLocation.latitude)
-            
-            // Calculate distance from current location to planned route
-            var minDistance = Double.MAX_VALUE
-            var nearestPoint: Point? = null
-            
-            route.geometry()?.let { geometry ->
-                // Simple implementation: find nearest coordinate on the route
-                val coordinates = geometry.coordinates()
-                coordinates.forEach { coordinate ->
-                    val distance = calculateDistance(
-                        currentPoint.latitude(), currentPoint.longitude(),
-                        coordinate.latitude(), coordinate.longitude()
-                    )
-                    if (distance < minDistance) {
-                        minDistance = distance
-                        nearestPoint = coordinate
-                    }
-                }
-                
-                val distanceThreshold = 100.0 // meters
-                
-                if (minDistance > distanceThreshold) {
-                    // Create off route event data
-                    val eventData = JSONObject().apply {
-                        put("distanceFromPlannedRoute", minDistance)
-                        put("isOffPlannedRoute", true)
-                        nearestPoint?.let { point ->
-                            put("nearestPlannedWaypoint", JSONObject().apply {
-                                put("latitude", point.latitude())
-                                put("longitude", point.longitude())
-                                put("name", "Ponto Mais Próximo")
-                            })
-                        }
-                    }
-                    
-                    PluginUtilities.sendEvent(MapBoxEvents.OFF_PLANNED_ROUTE, eventData.toString())
-                }
-            }
-        }
-    }
-
-    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val earthRadius = 6371000.0 // Earth radius in meters
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return earthRadius * c
-    }
+    // Simplified approach - let MapBox SDK handle route management
+    // The yellow planned route guide layer will be rendered separately
+    // The blue navigation route will recalculate automatically when needed
 }

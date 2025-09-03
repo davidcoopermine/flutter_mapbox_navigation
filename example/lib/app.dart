@@ -143,10 +143,10 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             opt.bannerInstructionsEnabled = true;
                             opt.units = VoiceUnits.metric;
                             opt.language = "pt-BR";
-                            // Ativar rota planejada
+                            // Ativar rota planejada (layer amarelo fixo)
                             opt.showPlannedRoute = true;
                             opt.plannedRouteColor = "#FFFF00";
-                            opt.offRouteWarningEnabled = true;
+                            opt.autoRecalculateOnDeviation = true;
                             await MapBoxNavigation.instance
                                 .startNavigation(wayPoints: wayPoints, options: opt);
                           },
@@ -365,22 +365,13 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           _isNavigating = false;
         });
         break;
-      case MapBoxEvent.off_planned_route:
-        // Motorista saiu da rota planejada
-        if (e.data is OffRouteEvent) {
-          final offRouteData = e.data as OffRouteEvent;
-          debugPrint("⚠️ ATENÇÃO: Você saiu da rota planejada!");
-          if (offRouteData.distanceFromPlannedRoute != null) {
-            debugPrint("Distância da rota planejada: "
-                "${offRouteData.distanceFromPlannedRoute!.toStringAsFixed(0)}m");
-          }
-          // Mostrar botão para voltar à rota planejada
-          _showReturnToPlannedRouteDialog();
-        }
+      case MapBoxEvent.user_off_route:
+        // Sistema automático: rota azul recalcula, amarela permanece fixa
+        debugPrint("🔄 Recalculando rota de navegação...");
         break;
-      case MapBoxEvent.returned_to_planned_route:
-        // Motorista voltou à rota planejada
-        debugPrint("✅ Você retornou à rota planejada!");
+      case MapBoxEvent.reroute_along:
+        // Rota azul foi recalculada, rota amarela permanece como guia
+        debugPrint("🆕 Nova rota de navegação calculada - guia amarelo mantido");
         break;
       default:
         break;
@@ -388,33 +379,8 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
     setState(() {});
   }
 
-  void _showReturnToPlannedRouteDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Rota Desviada'),
-          content: const Text(
-            'Você saiu da rota planejada. Deseja recalcular a rota de volta para o caminho planejado?'
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Continuar Atual'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                // Recalcular rota para a rota planejada
-                await MapBoxNavigation.instance.calculateRouteToPlannedRoute();
-              },
-              child: const Text('Voltar à Rota Planejada'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // Funcionalidade simplificada: 
+  // - Rota amarela = guia fixo (a rota original enviada)
+  // - Rota azul = navegação ativa (recalcula automaticamente quando necessário)
+  // - Sem rotas alternativas em cinza
 }

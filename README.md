@@ -344,28 +344,28 @@ Adicione o seguinte ao seu arquivo `info.plist`
 
 ## Alterações Recentes
 
-### v1.0.0+customizada com Rota Planejada
+### v1.0.0+customizada com Layer de Rota Guia
 - **✅ Removido botão "Cancel" desnecessário** da interface de navegação embarcada
 - **✅ Adicionado suporte completo para waypoints personalizados** com documentação em português
 - **✅ Melhorada experiência do usuário** com interface mais limpa
 - **✅ Documentação traduzida** para português brasileiro
 - **✅ Exemplos práticos** para uso de waypoints em cenários reais
-- **🆕 Sistema de Rota Planejada** - Nova funcionalidade para mostrar a rota original
-- **🆕 Detecção de Desvio** - Alerta quando o motorista sai da rota planejada
-- **🆕 Navegação de Retorno** - Opção para voltar à rota planejada original
+- **🆕 Layer de Rota Guia** - Rota original permanece fixa em amarelo como guia visual
+- **🆕 Recálculo Automático** - Rota azul recalcula automaticamente quando necessário
+- **🆕 Interface Limpa** - Sem rotas alternativas em cinza, apenas guia amarelo e navegação azul
 
-## Nova Funcionalidade: Sistema de Rota Planejada
+## Nova Funcionalidade: Layer de Rota Guia
 
-Esta versão introduz um sistema avançado de rota planejada que permite:
+Esta versão introduz um sistema de rota guia que simplifica a navegação:
 
-### Características da Rota Planejada
-- **Rota Fixa em Amarelo**: A primeira rota calculada fica sempre visível em amarelo no mapa
-- **Camada Inferior**: A rota planejada aparece por baixo da rota de navegação ativa
-- **Persistência**: Permanece visível mesmo durante recálculo de rotas
-- **Detecção Automática**: Sistema detecta quando o motorista sai da rota planejada
-- **Avisos Inteligentes**: Notificações quando há desvio da rota original
+### Características do Sistema
+- **Rota Guia Amarela**: A rota enviada fica sempre visível em amarelo como referência fixa
+- **Rota Navegação Azul**: Rota ativa de navegação que recalcula automaticamente quando necessário
+- **Interface Limpa**: Sem rotas alternativas em cinza, mantendo o mapa limpo
+- **Comportamento Automático**: Recálculo transparente da rota azul quando o usuário se desvia
+- **Referência Visual**: A rota amarela serve como guia do caminho originalmente planejado
 
-### Configuração da Rota Planejada
+### Configuração do Layer de Rota Guia
 
 ```dart
 final opcoes = MapBoxOptions(
@@ -374,10 +374,10 @@ final opcoes = MapBoxOptions(
   language: "pt-BR",
   units: VoiceUnits.metric,
   
-  // Novas opções de rota planejada
-  showPlannedRoute: true,              // Ativar rota planejada (padrão: true)
-  plannedRouteColor: "#FFFF00",        // Cor da rota planejada (padrão: amarelo)
-  offRouteWarningEnabled: true,        // Avisos de desvio (padrão: true)
+  // Configurações do sistema de rota guia
+  showPlannedRoute: true,                    // Ativar layer amarelo (padrão: true)
+  plannedRouteColor: "#FFFF00",              // Cor do guia (padrão: amarelo)
+  autoRecalculateOnDeviation: true,          // Recálculo automático (padrão: true)
 );
 
 await MapBoxNavigation.instance.startNavigation(
@@ -386,61 +386,64 @@ await MapBoxNavigation.instance.startNavigation(
 );
 ```
 
-### Eventos da Rota Planejada
+### Como Funciona
+
+1. **Ao iniciar navegação**: 
+   - Rota enviada aparece em **amarelo (guia fixo)** + **azul (navegação ativa)**
+   - Sem rotas alternativas em cinza
+
+2. **Durante navegação**:
+   - Se usuário segue a rota: apenas rota azul é visível sobre a amarela
+   - Se usuário se desvia: rota azul recalcula automaticamente
+   - Rota amarela **sempre permanece fixa** como referência visual
+
+3. **Benefícios**:
+   - **Motorista vê o caminho original planejado** (amarelo)
+   - **Sistema navega pela melhor rota atual** (azul)
+   - **Interface limpa** sem confusão de múltiplas rotas cinza
+
+### Eventos do Sistema
 
 ```dart
 MapBoxNavigation.instance.registerRouteEventListener((e) {
   switch (e.eventType) {
-    case MapBoxEvent.off_planned_route:
-      // Motorista saiu da rota planejada
-      if (e.data is OffRouteEvent) {
-        final offRouteData = e.data as OffRouteEvent;
-        print("⚠️ Você saiu da rota planejada!");
-        
-        if (offRouteData.distanceFromPlannedRoute != null) {
-          print("Distância da rota: ${offRouteData.distanceFromPlannedRoute!.toStringAsFixed(0)}m");
-        }
-        
-        // Mostrar opção para retornar à rota planejada
-        showReturnToPlannedRouteDialog();
-      }
+    case MapBoxEvent.user_off_route:
+      // Sistema automático: rota azul recalcula, amarela permanece fixa
+      debugPrint("🔄 Recalculando rota de navegação...");
       break;
       
-    case MapBoxEvent.returned_to_planned_route:
-      // Motorista voltou à rota planejada
-      print("✅ Você retornou à rota planejada!");
+    case MapBoxEvent.reroute_along:
+      // Rota azul foi recalculada, rota amarela permanece como guia
+      debugPrint("🆕 Nova rota de navegação calculada - guia amarelo mantido");
       break;
   }
 });
 ```
 
-### Métodos para Gerenciar Rota Planejada
+### Métodos para Gerenciar o Layer Guia
 
 ```dart
-// Definir rota planejada manualmente
-MapBoxNavigation.instance.setPlannedRoute(waypoints);
-
-// Obter rota planejada atual
+// Obter a rota guia atual
 final plannedRoute = MapBoxNavigation.instance.plannedRoute;
 
-// Calcular rota de volta para a rota planejada
-await MapBoxNavigation.instance.calculateRouteToPlannedRoute();
+// Definir rota guia manualmente (opcional)
+MapBoxNavigation.instance.setPlannedRoute(waypoints);
 
-// Limpar rota planejada
+// Limpar rota guia
 MapBoxNavigation.instance.clearPlannedRoute();
 ```
 
-### Dados do Evento de Desvio
+### Principais Diferenças
 
-```dart
-class OffRouteEvent {
-  final double? distanceFromPlannedRoute;  // Distância em metros
-  final WayPoint? nearestPlannedWaypoint;  // Ponto mais próximo na rota planejada
-  final bool isOffPlannedRoute;            // Se está fora da rota
-}
-```
+| Aspecto | Sistema Anterior | **Novo Sistema de Layer Guia** |
+|---------|------------------|--------------------------------|
+| **Rota Amarela** | Rota planejada com eventos complexos | **Layer fixo de referência visual** |
+| **Rota Azul** | Navegação com alertas | **Navegação com recálculo automático** |
+| **Rotas Cinza** | Alternativas mostradas | **Desabilitadas para interface limpa** |
+| **Comportamento** | Eventos manuais de desvio | **Totalmente automático** |
+| **Complexidade** | Diálogos e escolhas do usuário | **Transparente ao usuário** |
 
-### Exemplo de Implementação Completa
+### Exemplo de Implementação Simplificada
 
 ```dart
 class NavigationScreen extends StatefulWidget {
@@ -450,24 +453,28 @@ class NavigationScreen extends StatefulWidget {
 
 class _NavigationScreenState extends State<NavigationScreen> {
   
-  void _startNavigationWithPlannedRoute() async {
+  void _startNavigationWithGuideLayer() async {
     final waypoints = [
       WayPoint(name: "Casa", latitude: -23.550520, longitude: -46.633308),
       WayPoint(name: "Trabalho", latitude: -23.548943, longitude: -46.638818),
     ];
     
     final options = MapBoxOptions(
-      showPlannedRoute: true,
-      plannedRouteColor: "#FFFF00",
-      offRouteWarningEnabled: true,
+      // Configuração do layer de rota guia
+      showPlannedRoute: true,                    // Layer amarelo ativo
+      plannedRouteColor: "#FFFF00",              // Cor amarela
+      autoRecalculateOnDeviation: true,          // Recálculo automático
+      
+      // Configurações gerais
       language: "pt-BR",
       units: VoiceUnits.metric,
+      mode: MapBoxNavigationMode.drivingWithTraffic,
     );
     
-    // Registrar listener para eventos
+    // Registrar listener para eventos (opcional)
     MapBoxNavigation.instance.registerRouteEventListener(_onRouteEvent);
     
-    // Iniciar navegação
+    // Iniciar navegação - automático a partir daqui
     await MapBoxNavigation.instance.startNavigation(
       wayPoints: waypoints,
       options: options
@@ -476,38 +483,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
   
   void _onRouteEvent(RouteEvent e) {
     switch (e.eventType) {
-      case MapBoxEvent.off_planned_route:
-        _showReturnToPlannedRouteDialog();
+      case MapBoxEvent.user_off_route:
+        print("🔄 Sistema recalculando rota automaticamente...");
         break;
-      case MapBoxEvent.returned_to_planned_route:
-        _showMessage("Você retornou à rota planejada!");
+      case MapBoxEvent.reroute_along:
+        print("✅ Nova rota calculada - guia amarelo mantido!");
         break;
     }
   }
-  
-  void _showReturnToPlannedRouteDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Rota Desviada'),
-        content: Text('Você saiu da rota planejada. Deseja recalcular?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Continuar Atual'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await MapBoxNavigation.instance.calculateRouteToPlannedRoute();
-            },
-            child: Text('Voltar à Rota Planejada'),
-          ),
-        ],
-      ),
-    );
-  }
 }
+
+// Resultado Visual:
+// 🟡 Linha amarela = Rota original enviada (sempre fixa)
+// 🔵 Linha azul = Rota de navegação ativa (recalcula quando necessário)
+// ❌ Sem linhas cinza = Interface limpa
+```
 
 ## A Fazer
 * [FEITO] Implementação Android

@@ -19,7 +19,5 @@ enum class MapBoxEvents(val value: String) {
     ON_ARRIVAL("on_arrival"),
     FAILED_TO_REROUTE("failed_to_reroute"),
     REROUTE_ALONG("reroute_along"),
-    ON_MAP_TAP("on_map_tap"),
-    OFF_PLANNED_ROUTE("off_planned_route"),
-    RETURNED_TO_PLANNED_ROUTE("returned_to_planned_route")
+    ON_MAP_TAP("on_map_tap")
 }

@@ -20,7 +20,5 @@ enum MapBoxEvent {
   on_arrival,
   failed_to_reroute,
   reroute_along,
-  on_map_tap,
-  off_planned_route,
-  returned_to_planned_route
+  on_map_tap
 }

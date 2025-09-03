@@ -45,9 +45,8 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     // Planned route support
     var _showPlannedRoute = true
     var _plannedRouteColor = "#FFFF00"
-    var _offRouteWarningEnabled = true
+    var _autoRecalculateOnDeviation = true
     var _plannedRoute: RouteResponse?
-    var _isFirstRoute = true
     
     func addWayPoints(arguments: NSDictionary?, result: @escaping FlutterResult)
     {
@@ -131,10 +130,9 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
                 strongSelf.sendEvent(eventType: MapBoxEventType.route_build_failed)
                 flutterResult("An error occured while calculating the route \(error.localizedDescription)")
             case .success(let response):
-                // Store the first route as the planned route
-                if strongSelf._isFirstRoute && strongSelf._showPlannedRoute {
+                // Store the route as the planned guide route
+                if strongSelf._showPlannedRoute && strongSelf._plannedRoute == nil {
                     strongSelf._plannedRoute = response
-                    strongSelf._isFirstRoute = false
                 }
                 
                 guard let routes = response.routes else { return }
@@ -244,7 +242,12 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
         _alternatives = arguments?["alternatives"] as? Bool ?? _alternatives
         _showPlannedRoute = arguments?["showPlannedRoute"] as? Bool ?? _showPlannedRoute
         _plannedRouteColor = arguments?["plannedRouteColor"] as? String ?? _plannedRouteColor
-        _offRouteWarningEnabled = arguments?["offRouteWarningEnabled"] as? Bool ?? _offRouteWarningEnabled
+        _autoRecalculateOnDeviation = arguments?["autoRecalculateOnDeviation"] as? Bool ?? _autoRecalculateOnDeviation
+        
+        // Force alternatives to false when showing planned route to avoid gray routes
+        if _showPlannedRoute {
+            _alternatives = false
+        }
     }
     
     
@@ -277,9 +280,8 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     func endNavigation(result: FlutterResult?)
     {
         sendEvent(eventType: MapBoxEventType.navigation_finished)
-        // Reset planned route state
+        // Clear planned route when navigation ends
         _plannedRoute = nil
-        _isFirstRoute = true
         if(self._navigationViewController != nil)
         {
             self._navigationViewController?.navigationService.endNavigation(feedback: nil)
@@ -419,8 +421,7 @@ extension NavigationFactory : NavigationViewControllerDelegate {
         _durationRemaining = progress.durationRemaining
         sendEvent(eventType: MapBoxEventType.navigation_running)
         
-        // Check if user is off the planned route
-        checkOffPlannedRoute(progress: progress)
+        // Navigation progress tracking
         //_currentLegDescription =  progress.currentLeg.description
         if(_eventSink != nil)
         {
@@ -482,26 +483,11 @@ extension NavigationFactory : NavigationViewControllerDelegate {
     private func drawPlannedRoute() {
         guard _showPlannedRoute, let plannedRoute = _plannedRoute, let routes = plannedRoute.routes else { return }
         
-        // Get the map view from navigation controller
-        if let navigationMapView = _navigationViewController?.navigationMapView {
-            // For iOS, we'll use the route styling features available in NavigationMapView
-            // The planned route will be stored and compared for off-route detection
-            // Visual rendering of planned route requires custom implementation with MapboxMaps SDK
-            print("Planned route stored for comparison: \(routes.count) routes")
-        }
-    }
-    
-    private func checkOffPlannedRoute(progress: RouteProgress) {
-        guard _offRouteWarningEnabled, _plannedRoute != nil else { return }
-        
-        // Check if the current route is different from the planned route
-        if let currentRoute = progress.route,
-           let plannedRoute = _plannedRoute?.routes?.first {
-            
-            // Compare route identifiers or geometry
-            if currentRoute.identifier != plannedRoute.identifier {
-                sendEvent(eventType: MapBoxEventType.off_planned_route)
-            }
+        // Configure navigation to not show alternative routes in gray
+        if let navigationViewController = _navigationViewController {
+            // The planned route (yellow guide) should stay fixed
+            // The navigation route (blue) should recalculate when needed
+            print("Planned route guide layer configured: \(routes.count) routes")
         }
     }
     

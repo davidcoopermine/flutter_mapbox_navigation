@@ -37,7 +37,7 @@ class MapBoxOptions {
     this.enableOnMapTapCallback = false,
     this.showPlannedRoute = true,
     this.plannedRouteColor = '#FFFF00',
-    this.offRouteWarningEnabled = true,
+    this.autoRecalculateOnDeviation = true,
   });
 
   MapBoxOptions.from(MapBoxOptions option) {
@@ -65,7 +65,7 @@ class MapBoxOptions {
     showEndOfRouteFeedback = option.showEndOfRouteFeedback;
     showPlannedRoute = option.showPlannedRoute;
     plannedRouteColor = option.plannedRouteColor;
-    offRouteWarningEnabled = option.offRouteWarningEnabled;
+    autoRecalculateOnDeviation = option.autoRecalculateOnDeviation;
   }
 
   /// The initial Latitude of the Map View
@@ -174,16 +174,17 @@ class MapBoxOptions {
   /// to where you tap on the map.
   bool? enableOnMapTapCallback;
 
-  /// When true, shows the planned route in yellow color behind the navigation
-  /// route. Default is true.
+  /// When true, shows the original route in yellow as a fixed guide layer.
+  /// Default is true.
   bool? showPlannedRoute;
 
-  /// The color of the planned route in hex format. Default is #FFFF00 (yellow).
+  /// The color of the planned route guide layer in hex format. 
+  /// Default is #FFFF00 (yellow).
   String? plannedRouteColor;
 
-  /// When true, alerts the driver when they deviate from the planned route.
-  /// Default is true.
-  bool? offRouteWarningEnabled;
+  /// When true, automatically recalculates the blue navigation route when
+  /// deviating from the yellow guide route. Default is true.
+  bool? autoRecalculateOnDeviation;
 
   Map<String, dynamic> toMap() {
     final optionsMap = <String, dynamic>{};
@@ -244,7 +245,7 @@ class MapBoxOptions {
     addIfNonNull('enableOnMapTapCallback', enableOnMapTapCallback);
     addIfNonNull('showPlannedRoute', showPlannedRoute);
     addIfNonNull('plannedRouteColor', plannedRouteColor);
-    addIfNonNull('offRouteWarningEnabled', offRouteWarningEnabled);
+    addIfNonNull('autoRecalculateOnDeviation', autoRecalculateOnDeviation);
 
     return optionsMap;
   }

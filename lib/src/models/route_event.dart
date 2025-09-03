@@ -31,17 +31,6 @@ class RouteEvent {
       final json =
           Platform.isAndroid ? dataJson : jsonDecode(dataJson as String);
       data = WayPoint.fromJson(json as Map<String, dynamic>);
-    } else if (eventType == MapBoxEvent.off_planned_route || 
-               eventType == MapBoxEvent.returned_to_planned_route) {
-      // For planned route events, parse the off route event data
-      if (dataJson is Map<String, dynamic>) {
-        data = OffRouteEvent.fromJson(dataJson);
-      } else if (dataJson is String && dataJson.isNotEmpty) {
-        data = OffRouteEvent.fromJson(
-            jsonDecode(dataJson) as Map<String, dynamic>,);
-      } else {
-        data = dataJson;
-      }
     } else {
       data = jsonEncode(dataJson);
     }
