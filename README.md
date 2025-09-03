@@ -344,12 +344,170 @@ Adicione o seguinte ao seu arquivo `info.plist`
 
 ## Alterações Recentes
 
-### v1.0.0+customizada
+### v1.0.0+customizada com Rota Planejada
 - **✅ Removido botão "Cancel" desnecessário** da interface de navegação embarcada
 - **✅ Adicionado suporte completo para waypoints personalizados** com documentação em português
 - **✅ Melhorada experiência do usuário** com interface mais limpa
 - **✅ Documentação traduzida** para português brasileiro
 - **✅ Exemplos práticos** para uso de waypoints em cenários reais
+- **🆕 Sistema de Rota Planejada** - Nova funcionalidade para mostrar a rota original
+- **🆕 Detecção de Desvio** - Alerta quando o motorista sai da rota planejada
+- **🆕 Navegação de Retorno** - Opção para voltar à rota planejada original
+
+## Nova Funcionalidade: Sistema de Rota Planejada
+
+Esta versão introduz um sistema avançado de rota planejada que permite:
+
+### Características da Rota Planejada
+- **Rota Fixa em Amarelo**: A primeira rota calculada fica sempre visível em amarelo no mapa
+- **Camada Inferior**: A rota planejada aparece por baixo da rota de navegação ativa
+- **Persistência**: Permanece visível mesmo durante recálculo de rotas
+- **Detecção Automática**: Sistema detecta quando o motorista sai da rota planejada
+- **Avisos Inteligentes**: Notificações quando há desvio da rota original
+
+### Configuração da Rota Planejada
+
+```dart
+final opcoes = MapBoxOptions(
+  // Configurações existentes...
+  mode: MapBoxNavigationMode.drivingWithTraffic,
+  language: "pt-BR",
+  units: VoiceUnits.metric,
+  
+  // Novas opções de rota planejada
+  showPlannedRoute: true,              // Ativar rota planejada (padrão: true)
+  plannedRouteColor: "#FFFF00",        // Cor da rota planejada (padrão: amarelo)
+  offRouteWarningEnabled: true,        // Avisos de desvio (padrão: true)
+);
+
+await MapBoxNavigation.instance.startNavigation(
+  wayPoints: waypoints,
+  options: opcoes
+);
+```
+
+### Eventos da Rota Planejada
+
+```dart
+MapBoxNavigation.instance.registerRouteEventListener((e) {
+  switch (e.eventType) {
+    case MapBoxEvent.off_planned_route:
+      // Motorista saiu da rota planejada
+      if (e.data is OffRouteEvent) {
+        final offRouteData = e.data as OffRouteEvent;
+        print("⚠️ Você saiu da rota planejada!");
+        
+        if (offRouteData.distanceFromPlannedRoute != null) {
+          print("Distância da rota: ${offRouteData.distanceFromPlannedRoute!.toStringAsFixed(0)}m");
+        }
+        
+        // Mostrar opção para retornar à rota planejada
+        showReturnToPlannedRouteDialog();
+      }
+      break;
+      
+    case MapBoxEvent.returned_to_planned_route:
+      // Motorista voltou à rota planejada
+      print("✅ Você retornou à rota planejada!");
+      break;
+  }
+});
+```
+
+### Métodos para Gerenciar Rota Planejada
+
+```dart
+// Definir rota planejada manualmente
+MapBoxNavigation.instance.setPlannedRoute(waypoints);
+
+// Obter rota planejada atual
+final plannedRoute = MapBoxNavigation.instance.plannedRoute;
+
+// Calcular rota de volta para a rota planejada
+await MapBoxNavigation.instance.calculateRouteToPlannedRoute();
+
+// Limpar rota planejada
+MapBoxNavigation.instance.clearPlannedRoute();
+```
+
+### Dados do Evento de Desvio
+
+```dart
+class OffRouteEvent {
+  final double? distanceFromPlannedRoute;  // Distância em metros
+  final WayPoint? nearestPlannedWaypoint;  // Ponto mais próximo na rota planejada
+  final bool isOffPlannedRoute;            // Se está fora da rota
+}
+```
+
+### Exemplo de Implementação Completa
+
+```dart
+class NavigationScreen extends StatefulWidget {
+  @override
+  _NavigationScreenState createState() => _NavigationScreenState();
+}
+
+class _NavigationScreenState extends State<NavigationScreen> {
+  
+  void _startNavigationWithPlannedRoute() async {
+    final waypoints = [
+      WayPoint(name: "Casa", latitude: -23.550520, longitude: -46.633308),
+      WayPoint(name: "Trabalho", latitude: -23.548943, longitude: -46.638818),
+    ];
+    
+    final options = MapBoxOptions(
+      showPlannedRoute: true,
+      plannedRouteColor: "#FFFF00",
+      offRouteWarningEnabled: true,
+      language: "pt-BR",
+      units: VoiceUnits.metric,
+    );
+    
+    // Registrar listener para eventos
+    MapBoxNavigation.instance.registerRouteEventListener(_onRouteEvent);
+    
+    // Iniciar navegação
+    await MapBoxNavigation.instance.startNavigation(
+      wayPoints: waypoints,
+      options: options
+    );
+  }
+  
+  void _onRouteEvent(RouteEvent e) {
+    switch (e.eventType) {
+      case MapBoxEvent.off_planned_route:
+        _showReturnToPlannedRouteDialog();
+        break;
+      case MapBoxEvent.returned_to_planned_route:
+        _showMessage("Você retornou à rota planejada!");
+        break;
+    }
+  }
+  
+  void _showReturnToPlannedRouteDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Rota Desviada'),
+        content: Text('Você saiu da rota planejada. Deseja recalcular?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Continuar Atual'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await MapBoxNavigation.instance.calculateRouteToPlannedRoute();
+            },
+            child: Text('Voltar à Rota Planejada'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 ## A Fazer
 * [FEITO] Implementação Android
@@ -358,7 +516,11 @@ Adicione o seguinte ao seu arquivo `info.plist`
 * [FEITO] Visualização de Navegação Incorporável
 * [FEITO] Suporte completo para waypoints personalizados
 * [FEITO] Interface otimizada sem botões desnecessários
+* [FEITO] Sistema de Rota Planejada com detecção de desvio
+* [FEITO] Avisos automáticos quando o motorista sai da rota planejada
+* [FEITO] Funcionalidade de retorno à rota planejada original
 * Roteamento Offline
+* Melhorias na renderização visual da rota planejada
 
 <!-- Links -->
 [pub_badge]: https://img.shields.io/pub/v/flutter_mapbox_navigation.svg

@@ -33,10 +33,17 @@ import com.mapbox.navigation.core.arrival.ArrivalObserver
 import com.mapbox.navigation.core.directions.session.RoutesObserver
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.core.trip.session.*
+import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
+import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
+import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineOptions
+import com.mapbox.navigation.ui.maps.route.line.model.RouteLineColorResources
+import com.mapbox.navigation.ui.maps.route.line.model.RouteLineResources
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import org.json.JSONObject
 import java.util.*
+import kotlin.math.*
 
 open class TurnByTurn(
     ctx: Context,
@@ -140,6 +147,13 @@ open class TurnByTurn(
                     routerOrigin: RouterOrigin
                 ) {
                     this@TurnByTurn.currentRoutes = routes
+                    
+                    // Store the first route as the planned route
+                    if (this@TurnByTurn.isFirstRoute && this@TurnByTurn.showPlannedRoute) {
+                        this@TurnByTurn.plannedRoute = routes
+                        this@TurnByTurn.isFirstRoute = false
+                    }
+                    
                     PluginUtilities.sendEvent(
                         MapBoxEvents.ROUTE_BUILT,
                         Gson().toJson(routes.map { it.directionsRoute.toJson() })
@@ -214,12 +228,19 @@ open class TurnByTurn(
             return
         }
         this.binding.navigationView.api.startActiveGuidance(this.currentRoutes!!)
+        
+        // Draw planned route after navigation starts
+        drawPlannedRoute()
+        
         PluginUtilities.sendEvent(MapBoxEvents.NAVIGATION_RUNNING)
     }
 
     private fun finishNavigation(isOffRouted: Boolean = false) {
         MapboxNavigationApp.current()!!.stopTripSession()
         this.isNavigationCanceled = true
+        // Reset planned route state
+        this.plannedRoute = null
+        this.isFirstRoute = true
         PluginUtilities.sendEvent(MapBoxEvents.NAVIGATION_CANCELLED)
     }
 
@@ -317,6 +338,21 @@ open class TurnByTurn(
         if (onMapTap != null) {
             this.enableOnMapTapCallback = onMapTap
         }
+        
+        val showPlanned = arguments["showPlannedRoute"] as? Boolean
+        if (showPlanned != null) {
+            this.showPlannedRoute = showPlanned
+        }
+        
+        val plannedColor = arguments["plannedRouteColor"] as? String
+        if (plannedColor != null) {
+            this.plannedRouteColor = plannedColor
+        }
+        
+        val offRouteWarn = arguments["offRouteWarningEnabled"] as? Boolean
+        if (offRouteWarn != null) {
+            this.offRouteWarningEnabled = offRouteWarn
+        }
     }
 
     open fun registerObservers() {
@@ -389,10 +425,21 @@ open class TurnByTurn(
     private var enableOnMapTapCallback = false
     private var animateBuildRoute = true
     private var isOptimized = false
+    
+    // Planned route support
+    private var showPlannedRoute = true
+    private var plannedRouteColor = "#FFFF00"
+    private var offRouteWarningEnabled = true
+    private var plannedRoute: List<NavigationRoute>? = null
+    private var isFirstRoute = true
 
     private var currentRoutes: List<NavigationRoute>? = null
     private var isNavigationCanceled = false
 
+    // Route line APIs for planned route
+    private var plannedRouteLineApi: MapboxRouteLineApi? = null
+    private var plannedRouteLineView: MapboxRouteLineView? = null
+    
     /**
      * Bindings to the example layout.
      */
@@ -407,6 +454,11 @@ open class TurnByTurn(
     private val locationObserver = object : LocationObserver {
         override fun onNewLocationMatcherResult(locationMatcherResult: LocationMatcherResult) {
             this@TurnByTurn.lastLocation = locationMatcherResult.enhancedLocation
+            
+            // Check if user is off the planned route
+            locationMatcherResult.enhancedLocation?.let { location ->
+                checkOffPlannedRoute(location)
+            }
         }
 
         override fun onNewRawLocation(rawLocation: Location) {
@@ -425,12 +477,35 @@ open class TurnByTurn(
     private val offRouteObserver = OffRouteObserver { offRoute ->
         if (offRoute) {
             PluginUtilities.sendEvent(MapBoxEvents.USER_OFF_ROUTE)
+            
+            // Check if user is also off the planned route
+            if (offRouteWarningEnabled && currentRoutes != null && plannedRoute != null) {
+                // If current route is different from planned route, user is off planned route
+                if (currentRoutes?.firstOrNull()?.id != plannedRoute?.firstOrNull()?.id) {
+                    PluginUtilities.sendEvent(MapBoxEvents.OFF_PLANNED_ROUTE)
+                }
+            }
         }
     }
 
     private val routesObserver = RoutesObserver { routeUpdateResult ->
         if (routeUpdateResult.navigationRoutes.isNotEmpty()) {
-            PluginUtilities.sendEvent(MapBoxEvents.REROUTE_ALONG);
+            PluginUtilities.sendEvent(MapBoxEvents.REROUTE_ALONG)
+            
+            // Update current routes
+            currentRoutes = routeUpdateResult.navigationRoutes
+            
+            // Check if the new route is different from planned route
+            if (offRouteWarningEnabled && plannedRoute != null) {
+                val newRouteId = routeUpdateResult.navigationRoutes.firstOrNull()?.id
+                val plannedRouteId = plannedRoute?.firstOrNull()?.id
+                
+                if (newRouteId != plannedRouteId) {
+                    PluginUtilities.sendEvent(MapBoxEvents.OFF_PLANNED_ROUTE)
+                } else {
+                    PluginUtilities.sendEvent(MapBoxEvents.RETURNED_TO_PLANNED_ROUTE)
+                }
+            }
         }
     }
 
@@ -493,5 +568,110 @@ open class TurnByTurn(
 
     override fun onActivityDestroyed(activity: Activity) {
         Log.d("Embedded", "onActivityDestroyed not implemented")
+    }
+
+    private fun initializePlannedRouteLine() {
+        // Configure planned route line with yellow color
+        val routeLineColorResources = RouteLineColorResources.Builder()
+            .routeDefaultColor(android.graphics.Color.parseColor(plannedRouteColor))
+            .routeCasingColor(android.graphics.Color.parseColor(plannedRouteColor))
+            .routeLowCongestionColor(android.graphics.Color.parseColor(plannedRouteColor))
+            .routeModerateCongestionColor(android.graphics.Color.parseColor(plannedRouteColor))
+            .routeHeavyCongestionColor(android.graphics.Color.parseColor(plannedRouteColor))
+            .routeSevereCongestionColor(android.graphics.Color.parseColor(plannedRouteColor))
+            .build()
+
+        val routeLineResources = RouteLineResources.Builder()
+            .routeLineColorResources(routeLineColorResources)
+            .build()
+
+        val options = MapboxRouteLineOptions.Builder(this.context)
+            .withRouteLineResources(routeLineResources)
+            .withRouteLineBelowLayerId("road-label") // Put below road labels
+            .build()
+
+        plannedRouteLineApi = MapboxRouteLineApi(options)
+        plannedRouteLineView = MapboxRouteLineView(options)
+    }
+
+    private fun drawPlannedRoute() {
+        if (!showPlannedRoute || plannedRoute == null) return
+        
+        // Initialize route line if not already done
+        if (plannedRouteLineApi == null) {
+            initializePlannedRouteLine()
+        }
+        
+        // Draw the planned route
+        plannedRoute?.let { routes ->
+            plannedRouteLineApi?.setNavigationRoutes(routes) { value ->
+                // Render the route on the map
+                try {
+                    this.binding.navigationView.api.routeReplayEnabled(false)
+                    // For now, just store the route for comparison
+                    // Full visual rendering would require access to the MapView
+                    // which may not be directly accessible in this context
+                } catch (e: Exception) {
+                    Log.e("PlannedRoute", "Error drawing planned route: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun checkOffPlannedRoute(currentLocation: Location) {
+        if (!offRouteWarningEnabled || plannedRoute == null) return
+        
+        plannedRoute?.firstOrNull()?.directionsRoute?.let { route ->
+            val currentPoint = Point.fromLngLat(currentLocation.longitude, currentLocation.latitude)
+            
+            // Calculate distance from current location to planned route
+            var minDistance = Double.MAX_VALUE
+            var nearestPoint: Point? = null
+            
+            route.geometry()?.let { geometry ->
+                // Simple implementation: find nearest coordinate on the route
+                val coordinates = geometry.coordinates()
+                coordinates.forEach { coordinate ->
+                    val distance = calculateDistance(
+                        currentPoint.latitude(), currentPoint.longitude(),
+                        coordinate.latitude(), coordinate.longitude()
+                    )
+                    if (distance < minDistance) {
+                        minDistance = distance
+                        nearestPoint = coordinate
+                    }
+                }
+                
+                val distanceThreshold = 100.0 // meters
+                
+                if (minDistance > distanceThreshold) {
+                    // Create off route event data
+                    val eventData = JSONObject().apply {
+                        put("distanceFromPlannedRoute", minDistance)
+                        put("isOffPlannedRoute", true)
+                        nearestPoint?.let { point ->
+                            put("nearestPlannedWaypoint", JSONObject().apply {
+                                put("latitude", point.latitude())
+                                put("longitude", point.longitude())
+                                put("name", "Ponto Mais Próximo")
+                            })
+                        }
+                    }
+                    
+                    PluginUtilities.sendEvent(MapBoxEvents.OFF_PLANNED_ROUTE, eventData.toString())
+                }
+            }
+        }
+    }
+
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val earthRadius = 6371000.0 // Earth radius in meters
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLon / 2) * sin(dLon / 2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return earthRadius * c
     }
 }

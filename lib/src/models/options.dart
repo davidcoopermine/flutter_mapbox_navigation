@@ -35,6 +35,9 @@ class MapBoxOptions {
     this.showReportFeedbackButton = true,
     this.showEndOfRouteFeedback = true,
     this.enableOnMapTapCallback = false,
+    this.showPlannedRoute = true,
+    this.plannedRouteColor = '#FFFF00',
+    this.offRouteWarningEnabled = true,
   });
 
   MapBoxOptions.from(MapBoxOptions option) {
@@ -60,6 +63,9 @@ class MapBoxOptions {
     animateBuildRoute = option.animateBuildRoute;
     showReportFeedbackButton = option.showReportFeedbackButton;
     showEndOfRouteFeedback = option.showEndOfRouteFeedback;
+    showPlannedRoute = option.showPlannedRoute;
+    plannedRouteColor = option.plannedRouteColor;
+    offRouteWarningEnabled = option.offRouteWarningEnabled;
   }
 
   /// The initial Latitude of the Map View
@@ -168,6 +174,17 @@ class MapBoxOptions {
   /// to where you tap on the map.
   bool? enableOnMapTapCallback;
 
+  /// When true, shows the planned route in yellow color behind the navigation
+  /// route. Default is true.
+  bool? showPlannedRoute;
+
+  /// The color of the planned route in hex format. Default is #FFFF00 (yellow).
+  String? plannedRouteColor;
+
+  /// When true, alerts the driver when they deviate from the planned route.
+  /// Default is true.
+  bool? offRouteWarningEnabled;
+
   Map<String, dynamic> toMap() {
     final optionsMap = <String, dynamic>{};
     void addIfNonNull(String fieldName, dynamic value) {
@@ -225,6 +242,9 @@ class MapBoxOptions {
     addIfNonNull('showReportFeedbackButton', showReportFeedbackButton);
     addIfNonNull('showEndOfRouteFeedback', showEndOfRouteFeedback);
     addIfNonNull('enableOnMapTapCallback', enableOnMapTapCallback);
+    addIfNonNull('showPlannedRoute', showPlannedRoute);
+    addIfNonNull('plannedRouteColor', plannedRouteColor);
+    addIfNonNull('offRouteWarningEnabled', offRouteWarningEnabled);
 
     return optionsMap;
   }

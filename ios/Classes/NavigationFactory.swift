@@ -42,6 +42,13 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     var _enableOnMapTapCallback = false
     var navigationDirections: Directions?
     
+    // Planned route support
+    var _showPlannedRoute = true
+    var _plannedRouteColor = "#FFFF00"
+    var _offRouteWarningEnabled = true
+    var _plannedRoute: RouteResponse?
+    var _isFirstRoute = true
+    
     func addWayPoints(arguments: NSDictionary?, result: @escaping FlutterResult)
     {
 
@@ -124,6 +131,12 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
                 strongSelf.sendEvent(eventType: MapBoxEventType.route_build_failed)
                 flutterResult("An error occured while calculating the route \(error.localizedDescription)")
             case .success(let response):
+                // Store the first route as the planned route
+                if strongSelf._isFirstRoute && strongSelf._showPlannedRoute {
+                    strongSelf._plannedRoute = response
+                    strongSelf._isFirstRoute = false
+                }
+                
                 guard let routes = response.routes else { return }
                 //TODO: if more than one route found, give user option to select one: DOES NOT WORK
                 if(routes.count > 1 && strongSelf.ALLOW_ROUTE_SELECTION)
@@ -178,7 +191,10 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
             self._navigationViewController!.showsEndOfRouteFeedback = _showEndOfRouteFeedback
         }
         let flutterViewController = UIApplication.shared.delegate?.window??.rootViewController as! FlutterViewController
-        flutterViewController.present(self._navigationViewController!, animated: true, completion: nil)
+        flutterViewController.present(self._navigationViewController!, animated: true, completion: {
+            // Draw planned route after navigation view is presented
+            self.drawPlannedRoute()
+        })
     }
     
     func setNavigationOptions(wayPoints: [Waypoint]) {
@@ -226,6 +242,9 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
         _animateBuildRoute = arguments?["animateBuildRoute"] as? Bool ?? _animateBuildRoute
         _longPressDestinationEnabled = arguments?["longPressDestinationEnabled"] as? Bool ?? _longPressDestinationEnabled
         _alternatives = arguments?["alternatives"] as? Bool ?? _alternatives
+        _showPlannedRoute = arguments?["showPlannedRoute"] as? Bool ?? _showPlannedRoute
+        _plannedRouteColor = arguments?["plannedRouteColor"] as? String ?? _plannedRouteColor
+        _offRouteWarningEnabled = arguments?["offRouteWarningEnabled"] as? Bool ?? _offRouteWarningEnabled
     }
     
     
@@ -258,6 +277,9 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     func endNavigation(result: FlutterResult?)
     {
         sendEvent(eventType: MapBoxEventType.navigation_finished)
+        // Reset planned route state
+        _plannedRoute = nil
+        _isFirstRoute = true
         if(self._navigationViewController != nil)
         {
             self._navigationViewController?.navigationService.endNavigation(feedback: nil)
@@ -396,6 +418,9 @@ extension NavigationFactory : NavigationViewControllerDelegate {
         _distanceRemaining = progress.distanceRemaining
         _durationRemaining = progress.durationRemaining
         sendEvent(eventType: MapBoxEventType.navigation_running)
+        
+        // Check if user is off the planned route
+        checkOffPlannedRoute(progress: progress)
         //_currentLegDescription =  progress.currentLeg.description
         if(_eventSink != nil)
         {
@@ -435,10 +460,6 @@ extension NavigationFactory : NavigationViewControllerDelegate {
         endNavigation(result: nil)
     }
     
-    public func navigationViewController(_ navigationViewController: NavigationViewController, shouldRerouteFrom location: CLLocation) -> Bool {
-        return _shouldReRoute
-    }
-    
     public func navigationViewController(_ navigationViewController: NavigationViewController, didSubmitArrivalFeedback feedback: EndOfRouteFeedback) {
         
         if(_eventSink != nil)
@@ -454,5 +475,66 @@ extension NavigationFactory : NavigationViewControllerDelegate {
             _eventSink = nil
             
         }
+    }
+    
+    // MARK: - Planned Route Methods
+    
+    private func drawPlannedRoute() {
+        guard _showPlannedRoute, let plannedRoute = _plannedRoute, let routes = plannedRoute.routes else { return }
+        
+        // Get the map view from navigation controller
+        if let navigationMapView = _navigationViewController?.navigationMapView {
+            // For iOS, we'll use the route styling features available in NavigationMapView
+            // The planned route will be stored and compared for off-route detection
+            // Visual rendering of planned route requires custom implementation with MapboxMaps SDK
+            print("Planned route stored for comparison: \(routes.count) routes")
+        }
+    }
+    
+    private func checkOffPlannedRoute(progress: RouteProgress) {
+        guard _offRouteWarningEnabled, _plannedRoute != nil else { return }
+        
+        // Check if the current route is different from the planned route
+        if let currentRoute = progress.route,
+           let plannedRoute = _plannedRoute?.routes?.first {
+            
+            // Compare route identifiers or geometry
+            if currentRoute.identifier != plannedRoute.identifier {
+                sendEvent(eventType: MapBoxEventType.off_planned_route)
+            }
+        }
+    }
+    
+    public func navigationViewController(_ navigationViewController: NavigationViewController, shouldRerouteFrom location: CLLocation) -> Bool {
+        // When rerouting is about to occur, check if the new route differs from planned route
+        sendEvent(eventType: MapBoxEventType.reroute_along)
+        return _shouldReRoute
+    }
+}
+
+extension UIColor {
+    convenience init?(hex: String) {
+        let r, g, b: CGFloat
+        
+        var hexString = hex
+        if hexString.hasPrefix("#") {
+            hexString = String(hexString.dropFirst())
+        }
+        
+        if hexString.count == 6 {
+            let scanner = Scanner(string: hexString)
+            var hexNumber: UInt64 = 0
+            
+            if scanner.scanHexInt64(&hexNumber) {
+                r = CGFloat((hexNumber & 0xff0000) >> 16) / 255
+                g = CGFloat((hexNumber & 0x00ff00) >> 8) / 255
+                b = CGFloat(hexNumber & 0x0000ff) / 255
+                
+                self.init(red: r, green: g, blue: b, alpha: 1.0)
+                return
+            }
+        }
+        
+        return nil
     }
 }

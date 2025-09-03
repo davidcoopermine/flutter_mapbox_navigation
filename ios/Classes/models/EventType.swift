@@ -19,4 +19,6 @@ enum MapBoxEventType: String, Codable
     case failed_to_reroute
     case reroute_along
     case on_map_tap
+    case off_planned_route
+    case returned_to_planned_route
 }

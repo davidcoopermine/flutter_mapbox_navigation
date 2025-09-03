@@ -41,6 +41,16 @@ class WayPoint {
   /// Waypoint property isSilent
   bool? isSilent;
 
+  /// Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'latitude': latitude,
+      'longitude': longitude,
+      'isSilent': isSilent,
+    };
+  }
+
   @override
   String toString() {
     return 'WayPoint{latitude: $latitude, longitude: $longitude}';

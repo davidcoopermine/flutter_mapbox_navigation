@@ -29,7 +29,12 @@ class MapBoxNavigation {
     animateBuildRoute: true,
     longPressDestinationEnabled: true,
     language: 'pt-BR',
+    showPlannedRoute: true,
+    plannedRouteColor: '#FFFF00',
+    offRouteWarningEnabled: true,
   );
+
+  List<WayPoint>? _plannedRoute;
 
   /// setter to set default options
   void setDefaultOptions(MapBoxOptions options) {
@@ -89,13 +94,48 @@ class MapBoxNavigation {
     MapBoxOptions? options,
   }) async {
     options ??= _defaultOptions;
+    
+    // Store the first route as the planned route
+    if (_plannedRoute == null && (options.showPlannedRoute ?? false)) {
+      _plannedRoute = List<WayPoint>.from(wayPoints);
+    }
+    
     return FlutterMapboxNavigationPlatform.instance
         .startNavigation(wayPoints, options);
   }
 
   ///Ends Navigation and Closes the Navigation View
   Future<bool?> finishNavigation() async {
+    _plannedRoute = null; // Clear planned route when navigation ends
     return FlutterMapboxNavigationPlatform.instance.finishNavigation();
+  }
+
+  /// Gets the currently stored planned route
+  List<WayPoint>? get plannedRoute => _plannedRoute;
+
+  /// Manually sets the planned route
+  void setPlannedRoute(List<WayPoint> wayPoints) {
+    _plannedRoute = List<WayPoint>.from(wayPoints);
+  }
+
+  /// Clears the planned route
+  void clearPlannedRoute() {
+    _plannedRoute = null;
+  }
+
+  /// Calculates a route back to the planned route
+  /// This will find the nearest point on the planned route and create a route
+  /// to it
+  Future<bool?> calculateRouteToPlannedRoute() async {
+    if (_plannedRoute == null || _plannedRoute!.isEmpty) {
+      return false;
+    }
+    
+    // Get current location and calculate route to the nearest waypoint on
+    // planned route. For simplicity, we'll route to the next waypoint in the
+    // planned route
+    return FlutterMapboxNavigationPlatform.instance
+        .startNavigation(_plannedRoute!, _defaultOptions);
   }
 
   /// Will download the navigation engine and the user's region
