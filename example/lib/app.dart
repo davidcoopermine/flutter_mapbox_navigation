@@ -143,6 +143,10 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             opt.bannerInstructionsEnabled = true;
                             opt.units = VoiceUnits.metric;
                             opt.language = "pt-BR";
+                            // Ativar rota planejada (layer amarelo fixo)
+                            opt.showPlannedRoute = true;
+                            opt.plannedRouteColor = "#FFFF00";
+                            opt.autoRecalculateOnDeviation = true;
                             await MapBoxNavigation.instance
                                 .startNavigation(wayPoints: wayPoints, options: opt);
                           },
@@ -236,17 +240,6 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                                 }
                               : null,
                           child: const Text('Start '),
-                        ),
-                        const SizedBox(
-                          width: 10,
-                        ),
-                        ElevatedButton(
-                          onPressed: _isNavigating
-                              ? () {
-                                  _controller?.finishNavigation();
-                                }
-                              : null,
-                          child: const Text('Cancel '),
                         )
                       ],
                     ),
@@ -300,7 +293,7 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
                             children: <Widget>[
                               const Text("Distance Remaining: "),
                               Text(_distanceRemaining != null
-                                  ? "${(_distanceRemaining! * 0.000621371).toStringAsFixed(1)} miles"
+                                  ? "${(_distanceRemaining! / 1000).toStringAsFixed(1)} km"
                                   : "---")
                             ],
                           ),
@@ -372,9 +365,22 @@ class _SampleNavigationAppState extends State<SampleNavigationApp> {
           _isNavigating = false;
         });
         break;
+      case MapBoxEvent.user_off_route:
+        // Sistema automático: rota azul recalcula, amarela permanece fixa
+        debugPrint("🔄 Recalculando rota de navegação...");
+        break;
+      case MapBoxEvent.reroute_along:
+        // Rota azul foi recalculada, rota amarela permanece como guia
+        debugPrint("🆕 Nova rota de navegação calculada - guia amarelo mantido");
+        break;
       default:
         break;
     }
     setState(() {});
   }
+
+  // Funcionalidade simplificada: 
+  // - Rota amarela = guia fixo (a rota original enviada)
+  // - Rota azul = navegação ativa (recalcula automaticamente quando necessário)
+  // - Sem rotas alternativas em cinza
 }

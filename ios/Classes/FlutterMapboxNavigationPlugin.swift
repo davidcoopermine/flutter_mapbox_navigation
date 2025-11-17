@@ -43,6 +43,10 @@ public class FlutterMapboxNavigationPlugin: NavigationFactory, FlutterPlugin {
         {
             startNavigation(arguments: arguments, result: result)
         }
+        else if(call.method == "startNavigationWithGeoJson")
+        {
+            startNavigationWithGeoJson(arguments: arguments, result: result)
+        }
         else if(call.method == "addWayPoints")
         {
             addWayPoints(arguments: arguments, result: result)

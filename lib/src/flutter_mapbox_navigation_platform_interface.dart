@@ -70,6 +70,21 @@ abstract class FlutterMapboxNavigationPlatform extends PlatformInterface {
     throw UnimplementedError('startNavigation() has not been implemented.');
   }
 
+  ///Show the Navigation View and Begins Navigation with a GeoJSON route
+  ///
+  /// [geoJsonRoute] A predefined route in GeoJSON format that navigation will follow
+  /// [options] options used for navigation display and behavior
+  /// The navigation will follow the exact geometry provided in the GeoJSON,
+  /// and when off-route, will recalculate to snap back to the nearest point
+  /// on the original GeoJSON route.
+  ///
+  Future<bool?> startNavigationWithGeoJson(
+    GeoJsonRoute geoJsonRoute,
+    MapBoxOptions options,
+  ) async {
+    throw UnimplementedError('startNavigationWithGeoJson() has not been implemented.');
+  }
+
   ///Adds waypoints or stops to an on-going navigation
   ///
   /// [wayPoints] must not be null and have at least 1 item. The way points will

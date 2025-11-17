@@ -68,7 +68,7 @@ class MethodChannelFlutterMapboxNavigation
 
     final pointList = _getPointListFromWayPoints(wayPoints);
     var i = 0;
-    final wayPointMap = {for (var e in pointList) i++: e};
+    final wayPointMap = {for (final e in pointList) i++: e};
 
     final args = options.toMap();
     args['wayPoints'] = wayPointMap;
@@ -81,11 +81,26 @@ class MethodChannelFlutterMapboxNavigation
   }
 
   @override
+  Future<bool?> startNavigationWithGeoJson(
+    GeoJsonRoute geoJsonRoute,
+    MapBoxOptions options,
+  ) async {
+    final args = options.toMap();
+    args['geoJsonRoute'] = geoJsonRoute.toJson();
+
+    _routeEventSubscription = routeEventsListener!.listen(_onProgressData);
+    final result = await methodChannel.invokeMethod('startNavigationWithGeoJson', args);
+    if (result is bool) return result;
+    log(result.toString());
+    return false;
+  }
+
+  @override
   Future<dynamic> addWayPoints({required List<WayPoint> wayPoints}) async {
     assert(wayPoints.isNotEmpty, 'Error: WayPoints must be at least 1');
     final pointList = _getPointListFromWayPoints(wayPoints);
     var i = 0;
-    final wayPointMap = {for (var e in pointList) i++: e};
+    final wayPointMap = {for (final e in pointList) i++: e};
     final args = <String, dynamic>{};
     args['wayPoints'] = wayPointMap;
     await methodChannel.invokeMethod('addWayPoints', args);

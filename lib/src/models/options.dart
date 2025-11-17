@@ -1,6 +1,7 @@
 // ignore_for_file: public_member_api_docs
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_mapbox_navigation/src/models/geojson_route.dart';
 import 'package:flutter_mapbox_navigation/src/models/navmode.dart';
 import 'package:flutter_mapbox_navigation/src/models/voice_units.dart';
 
@@ -35,6 +36,10 @@ class MapBoxOptions {
     this.showReportFeedbackButton = true,
     this.showEndOfRouteFeedback = true,
     this.enableOnMapTapCallback = false,
+    this.showPlannedRoute = true,
+    this.plannedRouteColor = '#FFFF00',
+    this.autoRecalculateOnDeviation = true,
+    this.geoJsonRoute,
   });
 
   MapBoxOptions.from(MapBoxOptions option) {
@@ -60,6 +65,10 @@ class MapBoxOptions {
     animateBuildRoute = option.animateBuildRoute;
     showReportFeedbackButton = option.showReportFeedbackButton;
     showEndOfRouteFeedback = option.showEndOfRouteFeedback;
+    showPlannedRoute = option.showPlannedRoute;
+    plannedRouteColor = option.plannedRouteColor;
+    autoRecalculateOnDeviation = option.autoRecalculateOnDeviation;
+    geoJsonRoute = option.geoJsonRoute;
   }
 
   /// The initial Latitude of the Map View
@@ -73,7 +82,7 @@ class MapBoxOptions {
   /// This property affects the sentence
   /// contained within the RouteStep.instructions property, but it does not
   /// affect any road names contained in that property or other properties
-  /// such as RouteStep.name. Defaults to 'en' if an unsupported language
+  /// such as RouteStep.name. Defaults to 'pt-BR' if an unsupported language
   /// is specified. The languages in this link are supported:
   ///  https://docs.mapbox.com/android/navigation/overview/localization/ or
   /// https://docs.mapbox.com/ios/api/navigation/0.14.1/localization-and-internationalization.html
@@ -168,6 +177,25 @@ class MapBoxOptions {
   /// to where you tap on the map.
   bool? enableOnMapTapCallback;
 
+  /// When true, shows the original route in yellow as a fixed guide layer.
+  /// Default is true.
+  bool? showPlannedRoute;
+
+  /// The color of the planned route guide layer in hex format. 
+  /// Default is #FFFF00 (yellow).
+  String? plannedRouteColor;
+
+  /// When true, automatically recalculates the blue navigation route when
+  /// deviating from the yellow guide route. Default is true.
+  bool? autoRecalculateOnDeviation;
+
+  /// GeoJSON route to follow. When provided, navigation will follow this
+  /// exact route geometry instead of calculating routes from waypoints.
+  /// The route will be displayed in the specified color and remain fixed
+  /// during navigation. When off-route, recalculation will snap back to
+  /// the nearest point on this GeoJSON route.
+  GeoJsonRoute? geoJsonRoute;
+
   Map<String, dynamic> toMap() {
     final optionsMap = <String, dynamic>{};
     void addIfNonNull(String fieldName, dynamic value) {
@@ -225,6 +253,10 @@ class MapBoxOptions {
     addIfNonNull('showReportFeedbackButton', showReportFeedbackButton);
     addIfNonNull('showEndOfRouteFeedback', showEndOfRouteFeedback);
     addIfNonNull('enableOnMapTapCallback', enableOnMapTapCallback);
+    addIfNonNull('showPlannedRoute', showPlannedRoute);
+    addIfNonNull('plannedRouteColor', plannedRouteColor);
+    addIfNonNull('autoRecalculateOnDeviation', autoRecalculateOnDeviation);
+    addIfNonNull('geoJsonRoute', geoJsonRoute?.toJson());
 
     return optionsMap;
   }

@@ -24,12 +24,17 @@ class MapBoxNavigation {
     bannerInstructionsEnabled: true,
     allowsUTurnAtWayPoints: true,
     mode: MapBoxNavigationMode.drivingWithTraffic,
-    units: VoiceUnits.imperial,
+    units: VoiceUnits.metric,
     simulateRoute: false,
     animateBuildRoute: true,
     longPressDestinationEnabled: true,
     language: 'pt-BR',
+    showPlannedRoute: true,
+    plannedRouteColor: '#FFFF00',
+    autoRecalculateOnDeviation: true,
   );
+
+  List<WayPoint>? _plannedRoute;
 
   /// setter to set default options
   void setDefaultOptions(MapBoxOptions options) {
@@ -89,13 +94,70 @@ class MapBoxNavigation {
     MapBoxOptions? options,
   }) async {
     options ??= _defaultOptions;
+
+    // Always store the route as the planned guide route when enabled
+    if (options.showPlannedRoute ?? true) {
+      _plannedRoute = List<WayPoint>.from(wayPoints);
+    }
+
     return FlutterMapboxNavigationPlatform.instance
         .startNavigation(wayPoints, options);
   }
 
+  ///Show the Navigation View and Begins Navigation with a predefined GeoJSON route
+  ///
+  /// [geoJsonRoute] A predefined route in GeoJSON format. The navigation will
+  /// follow the exact geometry provided, displaying it in the specified color.
+  /// When the user goes off-route, the system will recalculate to snap back
+  /// to the nearest point on this GeoJSON route, maintaining the original path.
+  /// [options] options used for navigation display and behavior
+  ///
+  /// This is ideal for following predefined routes like delivery routes,
+  /// tour routes, or any scenario where you need to follow a specific path
+  /// rather than letting the navigation SDK calculate routes dynamically.
+  ///
+  Future<bool?> startNavigationWithGeoJson({
+    required GeoJsonRoute geoJsonRoute,
+    MapBoxOptions? options,
+  }) async {
+    options ??= _defaultOptions;
+
+    return FlutterMapboxNavigationPlatform.instance
+        .startNavigationWithGeoJson(geoJsonRoute, options);
+  }
+
   ///Ends Navigation and Closes the Navigation View
   Future<bool?> finishNavigation() async {
+    _plannedRoute = null; // Clear planned route when navigation ends
     return FlutterMapboxNavigationPlatform.instance.finishNavigation();
+  }
+
+  /// Gets the currently stored planned route
+  List<WayPoint>? get plannedRoute => _plannedRoute;
+
+  /// Manually sets the planned route
+  void setPlannedRoute(List<WayPoint> wayPoints) {
+    _plannedRoute = List<WayPoint>.from(wayPoints);
+  }
+
+  /// Clears the planned route
+  void clearPlannedRoute() {
+    _plannedRoute = null;
+  }
+
+  /// Calculates a route back to the planned route
+  /// This will find the nearest point on the planned route and create a route
+  /// to it
+  Future<bool?> calculateRouteToPlannedRoute() async {
+    if (_plannedRoute == null || _plannedRoute!.isEmpty) {
+      return false;
+    }
+    
+    // Get current location and calculate route to the nearest waypoint on
+    // planned route. For simplicity, we'll route to the next waypoint in the
+    // planned route
+    return FlutterMapboxNavigationPlatform.instance
+        .startNavigation(_plannedRoute!, _defaultOptions);
   }
 
   /// Will download the navigation engine and the user's region

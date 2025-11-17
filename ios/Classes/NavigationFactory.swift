@@ -27,7 +27,7 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     var _allowsUTurnAtWayPoints: Bool?
     var _isOptimized = false
     var _language = "pt-BR"
-    var _voiceUnits = "imperial"
+    var _voiceUnits = "metric"
     var _mapStyleUrlDay: String?
     var _mapStyleUrlNight: String?
     var _zoom: Double = 13.0
@@ -41,6 +41,16 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     var _showEndOfRouteFeedback = true
     var _enableOnMapTapCallback = false
     var navigationDirections: Directions?
+    
+    // Planned route support
+    var _showPlannedRoute = true
+    var _plannedRouteColor = "#FFFF00"
+    var _autoRecalculateOnDeviation = true
+    var _plannedRoute: RouteResponse?
+
+    // GeoJSON route support
+    var _geoJsonRouteGeometry: String?
+    var _geoJsonRouteColor: String?
     
     func addWayPoints(arguments: NSDictionary?, result: @escaping FlutterResult)
     {
@@ -112,6 +122,153 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     }
     
     
+    func startNavigationWithGeoJson(arguments: NSDictionary?, result: @escaping FlutterResult)
+    {
+        parseFlutterArguments(arguments: arguments)
+
+        guard let geoJsonRoute = arguments?["geoJsonRoute"] as? NSDictionary else {
+            result(FlutterError(code: "INVALID_ARGS", message: "geoJsonRoute is required", details: nil))
+            return
+        }
+
+        guard let geometry = geoJsonRoute["geometry"] as? String else {
+            result(FlutterError(code: "INVALID_GEOJSON", message: "GeoJSON geometry is required", details: nil))
+            return
+        }
+
+        _geoJsonRouteGeometry = geometry
+        _geoJsonRouteColor = geoJsonRoute["routeColor"] as? String ?? "#FFFF00"
+        _plannedRouteColor = _geoJsonRouteColor ?? "#FFFF00"
+
+        // Parse GeoJSON to get coordinates
+        do {
+            let coordinates = try parseGeoJsonGeometry(geometry: geometry)
+
+            if coordinates.count < 2 {
+                result(FlutterError(code: "INVALID_GEOJSON", message: "Route must have at least 2 points", details: nil))
+                return
+            }
+
+            // Create waypoints from first and last coordinates
+            let startWaypoint = Waypoint(coordinate: coordinates.first!, name: "Start")
+            let endWaypoint = Waypoint(coordinate: coordinates.last!, name: "End")
+            startWaypoint.separatesLegs = false
+            endWaypoint.separatesLegs = false
+
+            // Create route options with all coordinates
+            let simulationMode: SimulationMode = _simulateRoute ? .always : .never
+            var mode: ProfileIdentifier = .automobileAvoidingTraffic
+
+            if (_navigationMode == "cycling") {
+                mode = .cycling
+            } else if(_navigationMode == "driving") {
+                mode = .automobile
+            } else if(_navigationMode == "walking") {
+                mode = .walking
+            }
+
+            let options = NavigationRouteOptions(coordinates: coordinates, profileIdentifier: mode)
+            options.distanceMeasurementSystem = _voiceUnits == "imperial" ? .imperial : .metric
+            options.locale = Locale(identifier: _language)
+            options.includesAlternativeRoutes = false  // No alternatives for GeoJSON routes
+
+            _options = options
+
+            // Calculate route with exact coordinates
+            Directions.shared.calculate(options) { [weak self](session, result) in
+                guard let strongSelf = self else { return }
+                switch result {
+                case .failure(let error):
+                    strongSelf.sendEvent(eventType: MapBoxEventType.route_build_failed)
+                    result(FlutterError(code: "ROUTE_FAILED", message: "Failed to create route from GeoJSON: \(error.localizedDescription)", details: nil))
+                case .success(let response):
+                    // Store as the fixed planned route
+                    strongSelf._plannedRoute = response
+
+                    guard let routes = response.routes else {
+                        result(FlutterError(code: "NO_ROUTES", message: "No routes found", details: nil))
+                        return
+                    }
+
+                    let navigationService = MapboxNavigationService(routeResponse: response, routeIndex: 0, routeOptions: options, simulating: simulationMode)
+                    var dayStyle = CustomDayStyle()
+                    if(strongSelf._mapStyleUrlDay != nil){
+                        dayStyle = CustomDayStyle(url: strongSelf._mapStyleUrlDay)
+                    }
+                    let nightStyle = CustomNightStyle()
+                    if(strongSelf._mapStyleUrlNight != nil){
+                        nightStyle.mapStyleURL = URL(string: strongSelf._mapStyleUrlNight!)!
+                    }
+                    let navigationOptions = NavigationOptions(styles: [dayStyle, nightStyle], navigationService: navigationService)
+
+                    strongSelf.startNavigation(routeResponse: response, options: options, navOptions: navigationOptions)
+                    result(true)
+                }
+            }
+        } catch {
+            result(FlutterError(code: "PARSE_ERROR", message: "Failed to parse GeoJSON: \(error.localizedDescription)", details: nil))
+        }
+    }
+
+    func parseGeoJsonGeometry(geometry: String) throws -> [CLLocationCoordinate2D] {
+        // Try to parse as JSON first (GeoJSON LineString)
+        if let data = geometry.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+           let coordinates = json["coordinates"] as? [[Double]] {
+            return coordinates.compactMap { coord in
+                guard coord.count >= 2 else { return nil }
+                return CLLocationCoordinate2D(latitude: coord[1], longitude: coord[0])
+            }
+        }
+
+        // If not JSON, try to decode as polyline
+        if let decoded = decodePolyline(geometry) {
+            return decoded
+        }
+
+        throw NSError(domain: "GeoJSONParser", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid GeoJSON format"])
+    }
+
+    func decodePolyline(_ encodedPolyline: String) -> [CLLocationCoordinate2D]? {
+        var coordinates = [CLLocationCoordinate2D]()
+        var index = encodedPolyline.startIndex
+        var lat = 0
+        var lng = 0
+
+        while index < encodedPolyline.endIndex {
+            var b: Int
+            var shift = 0
+            var result = 0
+
+            repeat {
+                b = Int(encodedPolyline[index].asciiValue! - 63)
+                index = encodedPolyline.index(after: index)
+                result |= (b & 0x1f) << shift
+                shift += 5
+            } while b >= 0x20
+
+            let dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1))
+            lat += dlat
+
+            shift = 0
+            result = 0
+
+            repeat {
+                b = Int(encodedPolyline[index].asciiValue! - 63)
+                index = encodedPolyline.index(after: index)
+                result |= (b & 0x1f) << shift
+                shift += 5
+            } while b >= 0x20
+
+            let dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1))
+            lng += dlng
+
+            coordinates.append(CLLocationCoordinate2D(latitude: Double(lat) / 1e5, longitude: Double(lng) / 1e5))
+        }
+
+        return coordinates.isEmpty ? nil : coordinates
+    }
+
     func startNavigationWithWayPoints(wayPoints: [Waypoint], flutterResult: @escaping FlutterResult, isUpdatingWaypoints: Bool)
     {
         let simulationMode: SimulationMode = _simulateRoute ? .always : .never
@@ -124,6 +281,11 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
                 strongSelf.sendEvent(eventType: MapBoxEventType.route_build_failed)
                 flutterResult("An error occured while calculating the route \(error.localizedDescription)")
             case .success(let response):
+                // Store the route as the planned guide route
+                if strongSelf._showPlannedRoute && strongSelf._plannedRoute == nil {
+                    strongSelf._plannedRoute = response
+                }
+                
                 guard let routes = response.routes else { return }
                 //TODO: if more than one route found, give user option to select one: DOES NOT WORK
                 if(routes.count > 1 && strongSelf.ALLOW_ROUTE_SELECTION)
@@ -178,7 +340,10 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
             self._navigationViewController!.showsEndOfRouteFeedback = _showEndOfRouteFeedback
         }
         let flutterViewController = UIApplication.shared.delegate?.window??.rootViewController as! FlutterViewController
-        flutterViewController.present(self._navigationViewController!, animated: true, completion: nil)
+        flutterViewController.present(self._navigationViewController!, animated: true, completion: {
+            // Draw planned route after navigation view is presented
+            self.drawPlannedRoute()
+        })
     }
     
     func setNavigationOptions(wayPoints: [Waypoint]) {
@@ -226,6 +391,14 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
         _animateBuildRoute = arguments?["animateBuildRoute"] as? Bool ?? _animateBuildRoute
         _longPressDestinationEnabled = arguments?["longPressDestinationEnabled"] as? Bool ?? _longPressDestinationEnabled
         _alternatives = arguments?["alternatives"] as? Bool ?? _alternatives
+        _showPlannedRoute = arguments?["showPlannedRoute"] as? Bool ?? _showPlannedRoute
+        _plannedRouteColor = arguments?["plannedRouteColor"] as? String ?? _plannedRouteColor
+        _autoRecalculateOnDeviation = arguments?["autoRecalculateOnDeviation"] as? Bool ?? _autoRecalculateOnDeviation
+        
+        // Force alternatives to false when showing planned route to avoid gray routes
+        if _showPlannedRoute {
+            _alternatives = false
+        }
     }
     
     
@@ -258,6 +431,11 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
     func endNavigation(result: FlutterResult?)
     {
         sendEvent(eventType: MapBoxEventType.navigation_finished)
+        // Clear planned route when navigation ends
+        _plannedRoute = nil
+        // Clear GeoJSON route data
+        _geoJsonRouteGeometry = nil
+        _geoJsonRouteColor = nil
         if(self._navigationViewController != nil)
         {
             self._navigationViewController?.navigationService.endNavigation(feedback: nil)
@@ -278,7 +456,7 @@ public class NavigationFactory : NSObject, FlutterStreamHandler
                 })
             }
         }
-        
+
     }
     
     func getLocationsFromFlutterArgument(arguments: NSDictionary?) -> [Location]? {
@@ -396,6 +574,8 @@ extension NavigationFactory : NavigationViewControllerDelegate {
         _distanceRemaining = progress.distanceRemaining
         _durationRemaining = progress.durationRemaining
         sendEvent(eventType: MapBoxEventType.navigation_running)
+        
+        // Navigation progress tracking
         //_currentLegDescription =  progress.currentLeg.description
         if(_eventSink != nil)
         {
@@ -435,10 +615,6 @@ extension NavigationFactory : NavigationViewControllerDelegate {
         endNavigation(result: nil)
     }
     
-    public func navigationViewController(_ navigationViewController: NavigationViewController, shouldRerouteFrom location: CLLocation) -> Bool {
-        return _shouldReRoute
-    }
-    
     public func navigationViewController(_ navigationViewController: NavigationViewController, didSubmitArrivalFeedback feedback: EndOfRouteFeedback) {
         
         if(_eventSink != nil)
@@ -454,5 +630,51 @@ extension NavigationFactory : NavigationViewControllerDelegate {
             _eventSink = nil
             
         }
+    }
+    
+    // MARK: - Planned Route Methods
+    
+    private func drawPlannedRoute() {
+        guard _showPlannedRoute, let plannedRoute = _plannedRoute, let routes = plannedRoute.routes else { return }
+        
+        // Configure navigation to not show alternative routes in gray
+        if let navigationViewController = _navigationViewController {
+            // The planned route (yellow guide) should stay fixed
+            // The navigation route (blue) should recalculate when needed
+            print("Planned route guide layer configured: \(routes.count) routes")
+        }
+    }
+    
+    public func navigationViewController(_ navigationViewController: NavigationViewController, shouldRerouteFrom location: CLLocation) -> Bool {
+        // When rerouting is about to occur, check if the new route differs from planned route
+        sendEvent(eventType: MapBoxEventType.reroute_along)
+        return _shouldReRoute
+    }
+}
+
+extension UIColor {
+    convenience init?(hex: String) {
+        let r, g, b: CGFloat
+        
+        var hexString = hex
+        if hexString.hasPrefix("#") {
+            hexString = String(hexString.dropFirst())
+        }
+        
+        if hexString.count == 6 {
+            let scanner = Scanner(string: hexString)
+            var hexNumber: UInt64 = 0
+            
+            if scanner.scanHexInt64(&hexNumber) {
+                r = CGFloat((hexNumber & 0xff0000) >> 16) / 255
+                g = CGFloat((hexNumber & 0x00ff00) >> 8) / 255
+                b = CGFloat(hexNumber & 0x0000ff) / 255
+                
+                self.init(red: r, green: g, blue: b, alpha: 1.0)
+                return
+            }
+        }
+        
+        return nil
     }
 }

@@ -1,7 +1,9 @@
 export 'event_data.dart';
 export 'events.dart';
 export 'feedback.dart';
+export 'geojson_route.dart';
 export 'navmode.dart';
+export 'off_route_event.dart';
 export 'options.dart';
 export 'route_event.dart';
 export 'route_leg.dart';

@@ -111,7 +111,7 @@ class PluginUtilities {
             return if (filtered.isNotEmpty()) {
                 filtered.first()
             } else {
-                Locale.ENGLISH
+                Locale("pt", "BR")
             }
         }
 

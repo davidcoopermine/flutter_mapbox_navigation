@@ -38,6 +38,13 @@ class MockFlutterMapboxNavigationPlatform
       Future.value();
 
   @override
+  Future<bool?> startNavigationWithGeoJson(
+    GeoJsonRoute geoJsonRoute,
+    MapBoxOptions options,
+  ) =>
+      Future.value(true);
+
+  @override
   Future<dynamic> registerRouteEventListener(
     ValueSetter<RouteEvent> listener,
   ) =>
